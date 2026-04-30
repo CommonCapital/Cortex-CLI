@@ -52,17 +52,25 @@ A sophisticated knowledge base that provides long-term semantic and structural c
    npm run init-db
    ```
 
-### 3. Configuration
-
-Run the automated configuration tool inside the Cortex folder:
+### 3. Global Installation (Optional)
+To use Cortex-CLI from any directory on your system:
 ```bash
 cd Cortex-CLI/cli
-npm run dev configure
+npm run build
+npm link
 ```
-This will ask for your:
-- LLM API Keys and Base URL.
-- Database URL for Cortex (Session history).
-- Database URL for GraphMemory (Long-term context).
+Now you can simply run `cortex chat` anywhere!
+
+### 4. Configuration
+
+Run the automated configuration tool:
+```bash
+# Locally:
+npm run dev configure
+# Globally (after linking):
+cortex configure
+```
+This tool saves your settings to both the local `.env` and a global config at `~/.cortex-cli/.env`.
 
 ---
 
@@ -71,8 +79,11 @@ This will ask for your:
 ### Launching the Agent
 To start a coding session with full memory access:
 ```bash
-cd Cortex-CLI/cli
-npm run dev chat
+# Using the global command:
+cortex chat
+
+# Or resume a specific conversation:
+cortex chat --conversation 1
 ```
 
 ### Key Commands in Chat

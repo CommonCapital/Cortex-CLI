@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import chalk from 'chalk';
 import * as dotenv from 'dotenv';
@@ -7,9 +8,20 @@ import { db } from './db/index.js';
 import { conversations, messages as dbMessages } from './db/schema.js';
 import readline from 'readline';
 import fs from 'fs/promises';
+import { existsSync } from 'fs';
+import os from 'os';
+import path from 'path';
 import inquirer from 'inquirer';
 
-dotenv.config();
+// Load config from local .env or home directory ~/.cortex/.env
+const homeConfig = path.join(os.homedir(), '.cortex-cli', '.env');
+if (existsSync('.env')) {
+  dotenv.config();
+} else if (existsSync(homeConfig)) {
+  dotenv.config({ path: homeConfig });
+} else {
+  dotenv.config(); // Fallback to current dir
+}
 
 const program = new Command();
 
@@ -110,7 +122,15 @@ MEMORY_DB_URL=${answers.memoryDbUrl}
 `;
 
     await fs.writeFile('.env', envContent);
-    console.log(chalk.green('\nConfiguration saved to .env'));
+    
+    // Also save to home directory for global access
+    const homeDir = path.join(os.homedir(), '.cortex-cli');
+    if (!existsSync(homeDir)) {
+      await fs.mkdir(homeDir, { recursive: true });
+    }
+    await fs.writeFile(path.join(homeDir, '.env'), envContent);
+
+    console.log(chalk.green(`\nConfiguration saved to .env and ${homeDir}/.env`));
   });
 
 program
