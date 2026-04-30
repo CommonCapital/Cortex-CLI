@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: memoryos
+      POSTGRES_PASSWORD: memoryos
+      POSTGRES_DB: memoryos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+    env_file: .env.local
+    depends_on:
+      - postgres
+    volumes:
+      - ./ai-service:/app
+      - model_cache:/app/model_cache
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    env_file: .env.local
+    depends_on:
+      - ai-service
+
+  mcp-server:
+    build: ./mcp-server
+    ports:
+      - "3001:3001"
+    env_file: .env.local
+
+volumes:
+  pgdata:
+  model_cache:

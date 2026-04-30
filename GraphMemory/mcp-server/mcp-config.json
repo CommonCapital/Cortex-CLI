@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "memoryos": {
+      "command": "npx",
+      "args": ["-y", "ts-node", "/Users/alisultanomariv/Documents/GraphMemory/mcp-server/index.ts"],
+      "env": {
+        "MEMORYOS_API_URL": "http://localhost:3000",
+        "FASTAPI_URL": "http://localhost:8000"
+      }
+    }
+  }
+}

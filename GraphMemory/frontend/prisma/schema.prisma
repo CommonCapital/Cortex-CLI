@@ -1,0 +1,103 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, uuid_ossp(map: "uuid-ossp")]
+}
+
+model Note {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title     String
+  content   String    @default("")
+  tags      String[]
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  chunks      Chunk[]
+  graphNodes  GraphNode[]
+  sourceLinks WikiLink[] @relation("SourceNote")
+  targetLinks WikiLink[] @relation("TargetNote")
+
+  @@map("notes")
+}
+
+model Chunk {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  noteId     String    @db.Uuid
+  content    String
+  chunkIndex Int
+  embedding  Unsupported("vector(384)")?
+  note       Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@map("chunks")
+}
+
+model GraphNode {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  label      String
+  type       String    @default("concept")
+  noteId     String?   @db.Uuid
+  properties Json      @default("{}")
+  embedding  Unsupported("vector(384)")?
+  createdAt  DateTime  @default(now())
+  note       Note?     @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  outEdges   GraphEdge[] @relation("SourceNode")
+  inEdges    GraphEdge[] @relation("TargetNode")
+
+  @@map("graph_nodes")
+}
+
+model GraphEdge {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sourceId    String    @db.Uuid
+  targetId    String    @db.Uuid
+  relation    String
+  weight      Float     @default(1.0)
+  direction   String    @default("out")
+  confidence  Float     @default(1.0)
+  extractedBy String    @default("llm")
+  noteId      String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  source      GraphNode @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      GraphNode @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@map("graph_edges")
+}
+
+model WikiLink {
+  id           String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sourceNoteId String @db.Uuid
+  targetNoteId String @db.Uuid
+  source       Note   @relation("SourceNote", fields: [sourceNoteId], references: [id], onDelete: Cascade)
+  target       Note   @relation("TargetNote", fields: [targetNoteId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceNoteId, targetNoteId])
+  @@map("wiki_links")
+}
+
+model MemorySession {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  messages       Json[]   @default([])
+  contextNoteIds String[] @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("memory_sessions")
+}
+
+model NodeSimilarity {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nodeAId   String    @db.Uuid
+  nodeBId   String    @db.Uuid
+  score     Float
+  nodeA     GraphNode @relation("SimilarA", fields: [nodeAId], references: [id], onDelete: Cascade)
+  nodeB     GraphNode @relation("SimilarB", fields: [nodeBId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeAId, nodeBId])
+  @@map("node_similarities")
+}

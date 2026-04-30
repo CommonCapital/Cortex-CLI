@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary
+pydantic
+python-dotenv
+anthropic
+openai
+langchain
+langchain-community
+langchain-anthropic
+langchain-openai
+sentence-transformers
+spacy
+en-core-web-trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.7.3/en_core_web_trf-3.7.3.tar.gz
+tiktoken
+numpy
+umap-learn
+scikit-learn
+plotly
