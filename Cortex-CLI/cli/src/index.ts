@@ -12,6 +12,10 @@ import { existsSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import inquirer from 'inquirer';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 // Load config from local .env or home directory ~/.cortex/.env
 const homeConfig = path.join(os.homedir(), '.cortex-cli', '.env');
@@ -160,17 +164,23 @@ program
 
     console.log(chalk.blue('🚀 Starting Cortex Ecosystem...'));
 
-    // 1. Start Docker
-    console.log(chalk.yellow('📦 Starting Database (Docker)...'));
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
-    
-    try {
-      await execAsync('docker-compose up -d', { cwd: memoryPath });
-      console.log(chalk.green('✅ Database is running.'));
-    } catch (err: any) {
-      console.error(chalk.red(`❌ Docker failed: ${err.message}`));
+    // 1. Start Docker (Only if DB is local)
+    const isLocalDb = process.env.DATABASE_URL?.includes('localhost') || 
+                      process.env.MEMORY_DB_URL?.includes('localhost') ||
+                      process.env.DATABASE_URL?.includes('127.0.0.1') ||
+                      process.env.MEMORY_DB_URL?.includes('127.0.0.1');
+
+    if (isLocalDb) {
+      console.log(chalk.yellow('📦 Local DB detected. Starting Database (Docker)...'));
+      
+      try {
+        await execAsync('docker-compose up -d', { cwd: memoryPath });
+        console.log(chalk.green('✅ Local Database is running.'));
+      } catch (err: any) {
+        console.error(chalk.red(`❌ Docker failed: ${err.message}`));
+      }
+    } else {
+      console.log(chalk.cyan('☁️  Cloud DB detected (Neon/Remote). Skipping Docker...'));
     }
 
     // 2. Start AI Service
@@ -179,21 +189,17 @@ program
     const pythonPath = path.join(aiServicePath, 'venv', 'bin', 'python3');
     
     const aiProcess = exec(`${pythonPath} -m uvicorn main:app --port 8000`, { cwd: aiServicePath });
-    aiProcess.stdout?.on('data', (data) => console.log(chalk.gray(`[AI Service] ${data}`)));
+    aiProcess.stdout?.on('data', (data: any) => console.log(chalk.gray(`[AI Service] ${data}`)));
     
     // 3. Start Frontend
     console.log(chalk.yellow('🖥️ Starting MemoryOS Dashboard...'));
     const frontendPath = path.join(memoryPath, 'frontend');
     const feProcess = exec(`npm run dev`, { cwd: frontendPath });
-    feProcess.stdout?.on('data', (data) => console.log(chalk.gray(`[Frontend] ${data}`)));
+    feProcess.stdout?.on('data', (data: any) => console.log(chalk.gray(`[Frontend] ${data}`)));
 
     console.log(chalk.green('\n✨ All services are starting in the background!'));
     console.log(chalk.cyan('   - AI Service: http://localhost:8000'));
     console.log(chalk.cyan('   - Dashboard:  http://localhost:3000\n'));
-    
-    // Keep alive for a bit to see logs, then exit (services keep running if spawned correctly)
-    // Actually we should probably keep it running or use a proper manager like pm2.
-    // For now, we'll let it run in the terminal.
   });
 
 program
