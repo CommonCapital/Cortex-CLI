@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as dotenv from 'dotenv';
 import { LLMProvider } from './llm/provider.js';
-import { tools } from './tools/index.js';
+import { getTools } from './tools/index.js';
 import { db } from './db/index.js';
 import { conversations, messages as dbMessages } from './db/schema.js';
 import readline from 'readline';
@@ -32,6 +32,7 @@ program
 
 async function runAgent(messages: any[], llm: LLMProvider, conversationId: number) {
   let responding = true;
+  const tools = getTools(llm);
   
   while (responding) {
     const response = await llm.chat(messages, tools);
@@ -47,7 +48,7 @@ async function runAgent(messages: any[], llm: LLMProvider, conversationId: numbe
 
     if (response.tool_calls && response.tool_calls.length > 0) {
       for (const toolCall of response.tool_calls as any[]) {
-        const tool = tools.find(t => t.name === toolCall.function.name);
+        const tool = tools.find((t: any) => t.name === toolCall.function.name);
         if (tool) {
           console.log(chalk.yellow(`\n[Tool Call] ${tool.name}(${toolCall.function.arguments})`));
           const args = JSON.parse(toolCall.function.arguments);
@@ -112,6 +113,18 @@ program
         message: 'GraphMemory Database URL:',
         default: process.env.MEMORY_DB_URL || 'postgresql://postgres:password@localhost:5432/memoryos',
       },
+      {
+        type: 'input',
+        name: 'projectPath',
+        message: 'Cortex-CLI Root Path:',
+        default: process.env.PROJECT_PATH || path.join(os.homedir(), 'Documents/Cortex-CLI/Cortex-CLI'),
+      },
+      {
+        type: 'input',
+        name: 'memoryPath',
+        message: 'GraphMemory Root Path:',
+        default: process.env.MEMORY_PATH || path.join(os.homedir(), 'Documents/Cortex-CLI/GraphMemory'),
+      },
     ]);
 
     const envContent = `LLM_BASE_URL=${answers.baseUrl}
@@ -119,6 +132,8 @@ LLM_MODEL=${answers.model}
 LLM_API_KEY=${answers.apiKey}
 DATABASE_URL=${answers.dbUrl}
 MEMORY_DB_URL=${answers.memoryDbUrl}
+PROJECT_PATH=${answers.projectPath}
+MEMORY_PATH=${answers.memoryPath}
 `;
 
     await fs.writeFile('.env', envContent);
@@ -131,6 +146,54 @@ MEMORY_DB_URL=${answers.memoryDbUrl}
     await fs.writeFile(path.join(homeDir, '.env'), envContent);
 
     console.log(chalk.green(`\nConfiguration saved to .env and ${homeDir}/.env`));
+  });
+
+program
+  .command('up')
+  .description('Start all ecosystem services (Database, AI Service, Frontend)')
+  .action(async () => {
+    const memoryPath = process.env.MEMORY_PATH;
+    if (!memoryPath) {
+      console.log(chalk.red('Error: MEMORY_PATH is not configured. Run "cortex configure" first.'));
+      return;
+    }
+
+    console.log(chalk.blue('🚀 Starting Cortex Ecosystem...'));
+
+    // 1. Start Docker
+    console.log(chalk.yellow('📦 Starting Database (Docker)...'));
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    try {
+      await execAsync('docker-compose up -d', { cwd: memoryPath });
+      console.log(chalk.green('✅ Database is running.'));
+    } catch (err: any) {
+      console.error(chalk.red(`❌ Docker failed: ${err.message}`));
+    }
+
+    // 2. Start AI Service
+    console.log(chalk.yellow('🤖 Starting AI Service (Python)...'));
+    const aiServicePath = path.join(memoryPath, 'ai-service');
+    const pythonPath = path.join(aiServicePath, 'venv', 'bin', 'python3');
+    
+    const aiProcess = exec(`${pythonPath} -m uvicorn main:app --port 8000`, { cwd: aiServicePath });
+    aiProcess.stdout?.on('data', (data) => console.log(chalk.gray(`[AI Service] ${data}`)));
+    
+    // 3. Start Frontend
+    console.log(chalk.yellow('🖥️ Starting MemoryOS Dashboard...'));
+    const frontendPath = path.join(memoryPath, 'frontend');
+    const feProcess = exec(`npm run dev`, { cwd: frontendPath });
+    feProcess.stdout?.on('data', (data) => console.log(chalk.gray(`[Frontend] ${data}`)));
+
+    console.log(chalk.green('\n✨ All services are starting in the background!'));
+    console.log(chalk.cyan('   - AI Service: http://localhost:8000'));
+    console.log(chalk.cyan('   - Dashboard:  http://localhost:3000\n'));
+    
+    // Keep alive for a bit to see logs, then exit (services keep running if spawned correctly)
+    // Actually we should probably keep it running or use a proper manager like pm2.
+    // For now, we'll let it run in the terminal.
   });
 
 program

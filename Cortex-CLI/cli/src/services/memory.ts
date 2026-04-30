@@ -1,6 +1,7 @@
 import pkg from 'pg';
 const { Client } = pkg;
 import { pipeline } from '@xenova/transformers';
+import { v4 as uuidv4 } from 'uuid';
 
 let extractor: any = null;
 
@@ -100,6 +101,65 @@ export async function hybridSearch(query: string, dbUrl: string, topK: number = 
     return Array.from(merged.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
+  } finally {
+    await client.end();
+  }
+}
+
+export async function memorize(
+  title: string,
+  content: string,
+  graphData: { nodes: any[], edges: any[] },
+  dbUrl: string
+) {
+  const client = new Client({ connectionString: dbUrl });
+  await client.connect();
+
+  try {
+    const noteId = uuidv4();
+    const noteEmbedding = await embedText(`${title} ${content}`);
+
+    // 1. Insert Note
+    await client.query(
+      `INSERT INTO notes (id, title, content, embedding, "updatedAt") VALUES ($1, $2, $3, $4::vector, NOW())`,
+      [noteId, title, content, `[${noteEmbedding.join(',')}]`]
+    );
+
+    // 2. Insert Chunk
+    const chunkId = uuidv4();
+    await client.query(
+      `INSERT INTO chunks (id, "noteId", content, "chunkIndex", embedding) VALUES ($1, $2, $3, $4, $5::vector)`,
+      [chunkId, noteId, content, 0, `[${noteEmbedding.join(',')}]`]
+    );
+
+    // 3. Insert Nodes
+    for (const node of graphData.nodes) {
+      const nodeId = uuidv4();
+      const nodeEmbedding = await embedText(node.label);
+      await client.query(
+        `INSERT INTO graph_nodes (id, label, type, "noteId", properties, embedding) 
+         VALUES ($1, $2, $3, $4, $5, $6::vector)
+         ON CONFLICT (id) DO NOTHING`,
+        [nodeId, node.label, node.type || 'concept', noteId, JSON.stringify(node.properties || {}), `[${nodeEmbedding.join(',')}]`]
+      );
+      node.dbId = nodeId; // Store for edge creation
+    }
+
+    // 4. Insert Edges
+    for (const edge of graphData.edges) {
+      const sourceNode = graphData.nodes.find(n => n.label.toLowerCase() === edge.source.toLowerCase());
+      const targetNode = graphData.nodes.find(n => n.label.toLowerCase() === edge.target.toLowerCase());
+      
+      if (sourceNode?.dbId && targetNode?.dbId) {
+        await client.query(
+          `INSERT INTO graph_edges (id, "sourceId", "targetId", relation, weight, direction, confidence, "noteId") 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [uuidv4(), sourceNode.dbId, targetNode.dbId, edge.relation, 1.0, edge.direction || 'out', edge.confidence || 1.0, noteId]
+        );
+      }
+    }
+
+    return noteId;
   } finally {
     await client.end();
   }

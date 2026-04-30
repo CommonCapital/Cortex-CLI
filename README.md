@@ -45,7 +45,16 @@ A sophisticated knowledge base that provides long-term semantic and structural c
    npx prisma db push
    ```
 
-3. **Initialize Cortex-CLI (The Pilot)**:
+3. **Initialize AI Service (The Ingester)**:
+   This service handles entity extraction and graph indexing.
+   ```bash
+   cd GraphMemory/ai-service
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+4. **Initialize Cortex-CLI (The Pilot)**:
    ```bash
    cd ../../Cortex-CLI/cli
    npm install
@@ -71,6 +80,16 @@ npm run dev configure
 cortex configure
 ```
 This tool saves your settings to both the local `.env` and a global config at `~/.cortex-cli/.env`.
+
+### 5. Starting the Ecosystem
+To bring the entire ecosystem online with one command:
+```bash
+cortex up
+```
+This will automatically start:
+- **Docker** (PostgreSQL Database)
+- **AI Service** (Python Indexer)
+- **Dashboard** (Next.js Visualization)
 
 ---
 
