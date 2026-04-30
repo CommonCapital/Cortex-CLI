@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import './config.js';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import * as dotenv from 'dotenv';
 import { LLMProvider } from './llm/provider.js';
 import { getTools } from './tools/index.js';
 import { db } from './db/index.js';
@@ -16,16 +16,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
-
-// Load config from local .env or home directory ~/.cortex/.env
-const homeConfig = path.join(os.homedir(), '.cortex-cli', '.env');
-if (existsSync('.env')) {
-  dotenv.config();
-} else if (existsSync(homeConfig)) {
-  dotenv.config({ path: homeConfig });
-} else {
-  dotenv.config(); // Fallback to current dir
-}
 
 const program = new Command();
 
